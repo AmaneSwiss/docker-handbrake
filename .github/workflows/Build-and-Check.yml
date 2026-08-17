@@ -1,0 +1,131 @@
+---
+name: Build-and-Check
+
+on:
+  schedule:
+    - cron: '55 8 * * *'
+  push:
+    branches: [ "main" ]
+    tags: [ 'v*.*.*' ]
+
+env:
+  APP: handbrake
+  REGISTRY: docker.io
+  IMAGE_NAME: amaneswiss/handbrake
+  HEALTHCHECK_INTERVAL: 2
+  MAX_HEALTHCHECK_TIME: 300
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment: DOCKER
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log into registry ${{ env.REGISTRY }}
+        uses: docker/login-action@v4
+        with:
+          registry: "${{ env.REGISTRY }}"
+          username: "${{ vars.DOCKERHUB_ACCOUNT }}"
+          password: "${{ secrets.DOCKERHUB_TOKEN }}"
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+
+      - name: Build Docker image
+        id: build-and-push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: false
+          load: true
+          tags: "${{ steps.meta.outputs.tags }}"
+          labels: "${{ steps.meta.outputs.labels }}"
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Start container
+        id: run-container
+        run: |
+          IMAGE_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n 1)
+          echo "image_tag=${IMAGE_TAG}"
+          docker run -d --name "${{ env.APP }}" "${IMAGE_TAG}"
+
+      - name: Wait for container to become healthy
+        run: |
+          STATUS="none"
+          ELAPSED=0
+          MAX_ELAPSED=${{ env.MAX_HEALTHCHECK_TIME }}
+          while true; do
+            STATUS=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}No healthcheck{{end}}' "${{ env.APP }}" 2>/dev/null || echo "failed")
+
+            if [ "${STATUS}" = "starting" ]; then
+              echo "Container is starting…"
+            elif [ "${STATUS}" = "healthy" ]; then
+              echo "Container is healthy!"
+              docker logs -n 100 "${{ env.APP }}"
+              exit 0
+            elif [ "${STATUS}" = "unhealthy" ]; then
+              echo "Container reported unhealthy status."
+              docker logs -n 1000 "${{ env.APP }}"
+              exit 1
+            elif [ "${STATUS}" = "No healthcheck" ]; then
+              echo "No healthcheck defined on this image."
+              docker logs -n 100 "${{ env.APP }}"
+              exit 0
+            elif [ "${STATUS}" = "failed" ]; then
+              echo "Container failed to start."
+              docker logs -n 1000 "${{ env.APP }}"
+              exit 1
+            else
+              echo "Unexpected status: ${STATUS}"
+              docker logs -n 1000 "${{ env.APP }}"
+              exit 1
+            fi
+
+            sleep ${{ env.HEALTHCHECK_INTERVAL }}
+            ELAPSED=$((ELAPSED + ${{ env.HEALTHCHECK_INTERVAL }}))
+            if [ "${ELAPSED}" -ge "${MAX_ELAPSED}" ]; then
+              echo "Timed out after ${MAX_ELAPSED} seconds waiting for healthy status."
+              docker logs -n 1000 "${{ env.APP }}"
+              exit 1
+            fi
+          done
+
+          docker logs -n 1000 "${{ env.APP }}"
+          exit 1
+
+      - name: Push develop tag
+        if: success() && github.event_name != 'schedule'
+        run: |
+          SOURCE_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n 1)
+          DEVELOP_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:develop"
+          docker tag "${SOURCE_TAG}" "${DEVELOP_TAG}"
+          docker push "${DEVELOP_TAG}"
+
+      - name: Push nightly tag
+        if: success() && github.event_name == 'schedule'
+        run: |
+          SOURCE_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n 1)
+          NIGHTLY_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:nightly"
+          docker tag "${SOURCE_TAG}" "${NIGHTLY_TAG}"
+          docker push "${NIGHTLY_TAG}"
+
+      - name: Show container logs (always)
+        if: always()
+        run: docker logs "${{ env.APP }}" || true
+
+      - name: Stop and remove container
+        if: always()
+        run: docker rm -f "${{ env.APP }}" || true

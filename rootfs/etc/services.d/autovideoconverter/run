@@ -2,9 +2,21 @@
 
 set -u # Treat unset variables as an error.
 
-FAILED_CONVERSIONS="/config/failed_conversions"
-SUCCESSFUL_CONVERSIONS="/config/successful_conversions"
-IGNORED_CONVERSIONS="/config/ignored_conversion"
+if [[ "${LOGGING_FAILED_CONVERSIONS:-true,,}" == 'true' ]]; then
+    FAILED_CONVERSIONS="/config/failed_conversions"
+else
+    FAILED_CONVERSIONS="/dev/null"
+fi
+if [[ "${LOGGING_SUCCESSFUL_CONVERSIONS:-true,,}" == 'true' ]]; then
+    SUCCESSFUL_CONVERSIONS="/config/successful_conversions"
+else
+    SUCCESSFUL_CONVERSIONS="/dev/null"
+fi
+if [[ "${LOGGING_IGNORED_CONVERSIONS:-true,,}" == 'true' ]]; then
+    IGNORED_CONVERSIONS="/config/ignored_conversions"
+else
+    IGNORED_CONVERSIONS="/dev/null"
+fi
 
 HANDBRAKE_CLI="/usr/bin/HandBrakeCLI --preset-import-file /config/ghb/presets.json"
 
@@ -418,11 +430,15 @@ process_video() {
         # Set the temporary output directory: this is where the video will be
         # actually written before being moved its final location once conversion is
         # terminated.
-        OUTPUT_DIR_TMP="$(mktemp -d "$AC_OUTPUT_DIR/.XXXXXX")"
+        #!# Work around a uutils coreutils 0.8.0 bug: a template starting with ".XXXXXX"
+        #!# is incorrectly resolved outside the target directory.
+        OUTPUT_DIR_TMP="$(mktemp -d "${AC_OUTPUT_DIR%/}/XXXXXX")"
         if [ ! -d "$OUTPUT_DIR_TMP" ]; then
             hb_rc=1
             log "ERROR: Failed to create temporary directory under '$AC_OUTPUT_DIR'."
             break
+        else
+            log "Temporary output directory: '$OUTPUT_DIR_TMP'."
         fi
 
         # Set the temporary output filename.
@@ -446,7 +462,7 @@ process_video() {
                        $AC_HANDBRAKE_CUSTOM_ARGS \
             2> >(tee -a /config/log/hb/conversion.log | log_hb_encode_detect_success "$OUTPUT_FILE_TMP".success ) | \
             /usr/bin/unbuffer -p grep "^Encoding" | \
-            stdbuf -oL cut -d' ' -f2- | \
+            stdbuf -oL sed -E 's/^[^ ]+ //' | \
             tee >(log_hb_encode_progress) >(log_hb_encode_progress_yad) > /dev/null
         hb_rc=$?
 

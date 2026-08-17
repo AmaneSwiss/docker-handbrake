@@ -1,0 +1,85 @@
+#!/bin/sh
+#
+# This script checks the shell scripts and ensures that
+# any files starting with a shebang (#!/) are executable.
+#
+
+set -e # Exit immediately if a command exits with a non-zero status.
+set -u # Treat unset variables as an error.
+
+find /etc/cont-env.d -type f | while IFS= read -r file; do
+    path="${file%/*}"
+    filename="${file##*/}"
+    file_ext="${filename##*.}"
+    file_base="${filename%.*}"
+    [ "${file_ext}" = "${filename}" ] && file_ext=""
+    if grep -qE '^#!.*(bash|sh)($|[[:space:]])' "${file}" || [ "${file_ext}" = "sh" ]; then
+        if [ -f "${path}/${file_base}.sh" ]; then
+            if mv "${path}/${file_base}.sh" "${path}/${file_base}"; then
+                echo "Successfully renamed: ${path}/${file_base}.sh to ${path}/${file_base}" > /proc/1/fd/1
+            else
+                echo "Failed to rename: ${path}/${file_base}.sh to ${path}/${file_base}" > /proc/1/fd/2
+            fi
+        fi
+        if [ ! -x "${path}/${file_base}" ]; then
+            if chmod '+x' "${path}/${file_base}"; then
+                echo "Successfully set executable permission: ${path}/${file_base}" > /proc/1/fd/1
+            else
+                echo "Failed to chmod +x: ${path}/${file_base}" > /proc/1/fd/2
+            fi
+        fi
+    else
+        if [ -x "${file}" ]; then
+            if chmod '-x' "${file}"; then
+                echo "Successfully removed executable permission: ${file}" > /proc/1/fd/1
+            else
+                echo "Failed to chmod -x: ${file}" > /proc/1/fd/2
+            fi
+        fi
+    fi
+done
+
+find /etc/cont-init.d -type f | while IFS= read -r file; do
+    path="${file%/*}"
+    filename="${file##*/}"
+    file_base="${filename%.*}"
+    if grep -qE '^#!.*(bash|sh)($|[[:space:]])' "${file}"; then
+        if [ -f "${path}/${file_base}" ]; then
+            if mv "${path}/${file_base}" "${path}/${file_base}.sh"; then
+                echo "Successfully renamed: ${path}/${file_base} to ${path}/${file_base}.sh" > /proc/1/fd/1
+            else
+                echo "Failed to rename: ${path}/${file_base} to ${path}/${file_base}.sh" > /proc/1/fd/2
+            fi
+        fi
+        if [ ! -x "${path}/${file_base}.sh" ]; then
+            if chmod '+x' "${path}/${file_base}.sh"; then
+                echo "Successfully set executable permission: ${path}/${file_base}.sh" > /proc/1/fd/1
+            else
+                echo "Failed to chmod +x: ${path}/${file_base}.sh" > /proc/1/fd/2
+            fi
+        fi
+    else
+        if [ -x "${file}" ]; then
+            if chmod '-x' "${file}"; then
+                echo "Successfully removed executable permission: ${file}" > /proc/1/fd/1
+            else
+                echo "Failed to chmod -x: ${file}" > /proc/1/fd/2
+            fi
+        fi
+    fi
+done
+
+find /etc/services.d -type f | while IFS= read -r file; do
+    file_base="${file##*/}"
+    if [ "${file_base}" = "run" ] || [ "${file_base}" = "disabled" ] || [ "${file_base}" = "respawn" ] || [ "${file_base}" = "finish" ]; then
+        if [ ! -x "${file}" ]; then
+            if chmod '+x' "${file}"; then
+                echo "Successfully set executable permission: ${file}" > /proc/1/fd/1
+            else
+                echo "Failed to chmod +x: ${file}" > /proc/1/fd/2
+            fi
+        fi
+    fi
+done
+
+# vim:ts=4:sw=4:et:sts=4

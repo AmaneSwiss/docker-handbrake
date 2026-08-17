@@ -1,6 +1,6 @@
 # Define software versions.
 ARG HANDBRAKE_VERSION=1.11.2
-ARG UBUNTU_VERSION=26.04
+ARG UBUNTU_VERSION=24.04
 ARG BASEIMAGE_VERSION=4
 ARG DVDCSS_VERSION=1.6.0-1-1
 
@@ -166,7 +166,7 @@ ENV AUTOMATED_CONVERSION_PRESET="H.265 NVENC 1080p"
 
 # libdvd-pkg from Debian contrib (Ubuntu does not ship libdvdcss)
 ENV DVDCSS_NAME="libdvd-pkg_${DVDCSS_VERSION}_all.deb" \
-  DVDCSS_URL="https://ftp.debian.org/debian/pool/contrib/libd/libdvd-pkg/libdvd-pkg_${DVDCSS_VERSION}_all.deb"
+    DVDCSS_URL="https://ftp.debian.org/debian/pool/contrib/libd/libdvd-pkg/libdvd-pkg_${DVDCSS_VERSION}_all.deb"
 
 ENV APP_ICON_URL="https://raw.githubusercontent.com/jlesage/docker-templates/master/jlesage/images/handbrake-icon.png"
 
@@ -203,7 +203,6 @@ RUN apt-get install -y \
   findutils \
   git \
   lsscsi \
-  psmisc \
   tcl \
   wget \
   x11-utils \
@@ -212,44 +211,43 @@ RUN apt-get install -y \
 # Handbrake dependencies
 # FFmpeg shared libs
 RUN apt-get install -y --no-install-recommends \
-  libavcodec62 \
-  libavdevice62 \
-  libavfilter11 \
-  libavformat62 \
-  libavutil60 \
+  libavcodec60 \
+  libavdevice60 \
+  libavfilter9 \
+  libavformat60 \
+  libavutil58 \
   libsdl2-2.0-0 \
-  libswresample6 \
-  libswscale9
+  libswresample4 \
+  libswscale7
 
 # Additional media/codec runtime libs
 RUN apt-get install -y --no-install-recommends \
   libass9 \
-  libbluray3 \
+  libbluray2 \
   libdvdnav4 \
   libdvdread8t64 \
   libjansson4 \
   libnuma1 \
   libsamplerate0 \
-  libsvtav1enc2 \
-  libtheora1 \
-  libturbojpeg0 \
+  libsvtav1enc1d1 \
+  libtheora0 \
+  libturbojpeg \
   libvorbis0a \
   libvorbisenc2 \
-  libvpx12 \
-  libx264-165 \
-  libx265-215 \
-  libxml2-16
+  libvpx9 \
+  libx264-164 \
+  libx265-199 \
+  libxml2
 
 # Intel QSV runtime
 RUN apt-get install -y --no-install-recommends \
   libdrm2 \
   libva-drm2 \
   libva2 \
-  libmfx-gen1.2 \
+  libmfx1 \
   libvpl2 \
   i965-va-driver \
-  intel-media-va-driver-non-free \
-  mesa-libgallium
+  intel-media-va-driver-non-free
 
 # GStreamer runtime
 RUN apt-get install -y --no-install-recommends \
@@ -295,7 +293,7 @@ RUN if [ -n "${HANDBRAKE_DOCKER_VERSION_TAG}" ]; then \
 RUN cp -a ./docker-handbrake/rootfs/. / \
  && rm -Rf ./docker-handbrake
 
-# Copy custom startup scripts and service definitions
+# Container initialization scripts (watchfolder, automated conversion)
 COPY rootfs/etc/cont-init.d/10-set-locale.sh /etc/cont-init.d/
 COPY rootfs/etc/services.d/autovideoconverter/run /etc/services.d/autovideoconverter/
 RUN chmod '0755' /etc/cont-init.d/* /etc/services.d/autovideoconverter/run
