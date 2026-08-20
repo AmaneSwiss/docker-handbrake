@@ -1,4 +1,4 @@
-# HandBrake
+## HandBrake | [Github](https://github.com/AmaneSwiss/docker-handbrake)
 
 - With healthcheck -> [autoheal](https://hub.docker.com/r/willfarrell/autoheal)
 - Add locales for $LANG env. like de_DE.UTF-8
@@ -94,7 +94,7 @@ services:
       AUTOMATED_CONVERSION_NON_VIDEO_FILE_ACTION: ignore
       AUTOMATED_CONVERSION_NON_VIDEO_FILE_EXTENSIONS: "jpg jpeg bmp png gif txt nfo rar zip 7z mp4"
       AUTOMATED_CONVERSION_NO_GUI_PROGRESS: 0
-      AUTOMATED_CONVERSION_PRESET: "H.265 NVENC 1080p"
+      AUTOMATED_CONVERSION_PRESET: "Hardware/H.265 NVENC 1080p"
       AUTOMATED_CONVERSION_SOURCE_MAIN_TITLE_DETECTION: 0
       AUTOMATED_CONVERSION_SOURCE_MIN_DURATION: 300
       AUTOMATED_CONVERSION_SOURCE_STABLE_TIME: 5

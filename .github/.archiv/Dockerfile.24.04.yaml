@@ -162,7 +162,7 @@ ENV APP_NAME="HandBrake" \
     DOCKER_IMAGE_VERSION="${UBUNTU_VERSION}-v${BASEIMAGE_VERSION}" \
     DOCKER_IMAGE_PLATFORM="ubuntu/amd64"
 
-ENV AUTOMATED_CONVERSION_PRESET="H.265 NVENC 1080p"
+ENV AUTOMATED_CONVERSION_PRESET="Hardware/H.265 NVENC 1080p"
 
 # libdvd-pkg from Debian contrib (Ubuntu does not ship libdvdcss)
 ENV DVDCSS_NAME="libdvd-pkg_${DVDCSS_VERSION}_all.deb" \
