@@ -2,20 +2,37 @@
 
 set -u # Treat unset variables as an error.
 
+if [[ "${LOGGING_AUTOMATIC_CONVERSIONS:-true,,}" == 'true' ]]; then
+    AUTOMATIC_CONVERSIONS="/config/log/hb/conversion.log"
+else
+    AUTOMATIC_CONVERSIONS="/dev/null"
+    if [ -f "/config/log/hb/conversion.log" ]; then
+        rm -f "/config/log/hb/"* || true
+    fi
+fi
 if [[ "${LOGGING_FAILED_CONVERSIONS:-true,,}" == 'true' ]]; then
     FAILED_CONVERSIONS="/config/failed_conversions"
 else
     FAILED_CONVERSIONS="/dev/null"
+    if [ -f "/config/failed_conversions" ]; then
+        rm -f "/config/failed_conversions" || true
+    fi
 fi
 if [[ "${LOGGING_SUCCESSFUL_CONVERSIONS:-true,,}" == 'true' ]]; then
     SUCCESSFUL_CONVERSIONS="/config/successful_conversions"
 else
     SUCCESSFUL_CONVERSIONS="/dev/null"
+    if [ -f "/config/successful_conversions" ]; then
+        rm -f "/config/successful_conversions" || true
+    fi
 fi
 if [[ "${LOGGING_IGNORED_CONVERSIONS:-true,,}" == 'true' ]]; then
-    IGNORED_CONVERSIONS="/config/ignored_conversions"
+    IGNORED_CONVERSIONS="/config/ignored_conversion"
 else
     IGNORED_CONVERSIONS="/dev/null"
+    if [ -f "/config/ignored_conversion" ]; then
+        rm -f "/config/ignored_conversion" || true
+    fi
 fi
 
 HANDBRAKE_CLI="/usr/bin/HandBrakeCLI --preset-import-file /config/ghb/presets.json"
@@ -452,15 +469,14 @@ process_video() {
         fi
 
         # Invoke HandBrake.
-        echo "------- CONVERSION OUTPUT $(date) -------" >> \
-            /config/log/hb/conversion.log
+        echo "------- CONVERSION OUTPUT $(date) -------" >> "${AUTOMATIC_CONVERSIONS}"
         $HANDBRAKE_CLI -i "$video" \
                        -o "$OUTPUT_FILE_TMP" \
                        $title_arg \
                        --preset "$AC_PRESET" \
                        $HANDBRAKE_HOOK_CUSTOM_ARGS \
                        $AC_HANDBRAKE_CUSTOM_ARGS \
-            2> >(tee -a /config/log/hb/conversion.log | log_hb_encode_detect_success "$OUTPUT_FILE_TMP".success ) | \
+            2> >(tee -a "${AUTOMATIC_CONVERSIONS}" | log_hb_encode_detect_success "$OUTPUT_FILE_TMP".success ) | \
             /usr/bin/unbuffer -p grep "^Encoding" | \
             stdbuf -oL sed -E 's/^[^ ]+ //' | \
             tee >(log_hb_encode_progress) >(log_hb_encode_progress_yad) > /dev/null
@@ -535,7 +551,7 @@ process_video() {
         fi
     else
         log "Conversion failed."
-        log "For more details about the failure, see /config/log/hb/conversion.log."
+        log "For more details about the failure, see ${AUTOMATIC_CONVERSIONS}."
         if ! echo "$AC_PRESET" | grep -q "/"; then
             log "NOTE: The configured preset doesn't seem to include its category.  A preset must"
             log "      must now be identified using the following format: '<CATEGORY>/<PRESET NAME>'."
