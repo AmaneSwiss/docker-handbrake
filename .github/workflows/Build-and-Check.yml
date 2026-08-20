@@ -5,8 +5,10 @@ on:
   schedule:
     - cron: '55 8 * * *'
   push:
-    branches: [ "main" ]
-    tags: [ 'v*.*.*' ]
+    branches:
+      - main
+  release:
+    types: [published]
 
 env:
   APP: handbrake
@@ -26,6 +28,17 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+
+      - name: Extract version info from Dockerfile
+        id: versions
+        run: |
+          HANDBRAKE_VERSION=$(grep -m1 '^ARG HANDBRAKE_VERSION=' Dockerfile | cut -d= -f2)
+          UBUNTU_VERSION=$(grep -m1 '^ARG UBUNTU_VERSION=' Dockerfile | cut -d= -f2)
+          if [ -z "${HANDBRAKE_VERSION}" ] || [ -z "${UBUNTU_VERSION}" ]; then
+            echo "Could not determine HANDBRAKE_VERSION/UBUNTU_VERSION from Dockerfile" >&2
+            exit 1
+          fi
+          echo "image_tag=${HANDBRAKE_VERSION}-${UBUNTU_VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -106,14 +119,6 @@ jobs:
           docker logs -n 1000 "${{ env.APP }}"
           exit 1
 
-      - name: Push develop tag
-        if: success() && github.event_name != 'schedule'
-        run: |
-          SOURCE_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n 1)
-          DEVELOP_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:develop"
-          docker tag "${SOURCE_TAG}" "${DEVELOP_TAG}"
-          docker push "${DEVELOP_TAG}"
-
       - name: Push nightly tag
         if: success() && github.event_name == 'schedule'
         run: |
@@ -121,6 +126,30 @@ jobs:
           NIGHTLY_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:nightly"
           docker tag "${SOURCE_TAG}" "${NIGHTLY_TAG}"
           docker push "${NIGHTLY_TAG}"
+
+      - name: Push develop tag when a push event occurs on the main branch
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          SOURCE_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n 1)
+          DEVELOP_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:develop"
+          docker tag "${SOURCE_TAG}" "${DEVELOP_TAG}"
+          docker push "${DEVELOP_TAG}"
+
+      - name: Push version tag when a release is published
+        if: success() && github.event_name == 'release'
+        run: |
+          SOURCE_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n 1)
+          FINAL_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.versions.outputs.image_tag }}"
+          docker tag "${SOURCE_TAG}" "${FINAL_TAG}"
+          docker push "${FINAL_TAG}"
+
+      - name: Push latest tag when release is marked as latest
+        if: success() && github.event_name == 'release' && github.event.release.make_latest != 'false'
+        run: |
+          SOURCE_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n 1)
+          LATEST_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+          docker tag "${SOURCE_TAG}" "${LATEST_TAG}"
+          docker push "${LATEST_TAG}"
 
       - name: Show container logs (always)
         if: always()
